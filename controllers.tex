@@ -57,25 +57,25 @@ This control and optimization approach provides formal guarantees about steady-s
 
 We demonstrated POET's ability to meet performance goals and adapt to changes in application phases at runtime by executing the \bench{x264} video encoding application using an input that is a combination of three videos of varying encoding difficulty.
 
-\figref{poet-phases-default} is a time series of job latency and system power power consumption when running \bench{x264} without POET in
-the highest resource configuration ($C-1$).
-Latency is normalized to the maximum recorded value.
-Frames that are easier to encode take less time (lower latency), indicating that it would require fewer system resources to meet a performance goal than a frame with higher latency.
-Application phases changes occur at frames 1,500 and 3,000, where there is an observable change in latency.
-The first and third phases have similar latencies, and thus are about the same level of encoding difficulty; the second phase is easiest to encode as it has lower average latency.
+\figref{poet-phases-default} is a time series of job performance and system power power consumption when running \bench{x264} without POET in the highest resource configuration ($C-1$).
+Performance is normalized to the maximum recorded value.
+Frames that are easier to encode take less time (higher performance), indicating that it would require fewer system resources to meet a performance goal than a frame with lower performance.
+Application phases changes occur at frames 1,500 and 3,000, where there is an observable change in performance.
+The first and third phases have similar performance behavior, and thus are about the same level of encoding difficulty; the second phase is easiest to encode as it has higher average performance.
 
 \begin{figure}[t]
-  \input{img/POET/x264-phases-default.tex}
+  \input{img/clover/x264-phases-default.tex}
   \caption{Processing x264 input with distinct phases.}
   \label{fig:poet-phases-default}
 \end{figure}
+
 \begin{figure}[t]
-  \input{img/POET/x264-phases.tex}    
+  \input{img/POET/x264-phases.tex}
   \caption{Processing x264 input with distinct phases using POET.}
   \label{fig:poet-phases-x264}
 \end{figure}
 
-In \figref{poet-phases-x264}, we run with POET enabled, using a performance target that is about half of the system's maximum capacity (\ie twice the minimum latency).
+In \figref{poet-phases-x264}, we run with POET enabled, using a performance target that is about half of the system's maximum capacity.
 POET takes initial performance measurements during the first 100 frames, then begins changes system resources to meet the performance goal.
 After around frame 300, the soft performance goal is respected for the remainder of the runtime.
 Performance is still somewhat noisy due to the unpredictable behavior of \bench{x264}, as can be observed in the uncontrolled execution, with slight dips and peaks appearing at the beginning of phases changes before POET has time to adapt.
@@ -92,7 +92,9 @@ POET was also the starting point in an ongoing project called Proteus, in which 
 As hardware manufacturers move away from software-specified DVFS settings, we instead propose using software-defined, hardware-enforced power capping as the actuation mechanism for controllers.
 We therefore proposed CoPPer, \textbf{Co}ntrol \textbf{P}erformance with \textbf{P}ow\textbf{er}.
 In CoPPer, we address the same problem of minimizing energy consumption under soft performance constraints, with the hardware power capping implementation performing DVFS optimization ``under the hood'' for us, avoiding the need for the software controller to compute an optimal schedule.
+For this project, we do not manage core allocation.
 We evaluated CoPPer on the same server-class system as POET, using Intel Running Average Power Limit (RAPL) as the power capping implementation \cite{RAPL}.
+Specifically, we use the short term Package-level power constraints on each of the two system processor sockets.
 
 \figref{copper-runtime} demonstrates CoPPer's design.
 Note the absence of an \emph{optimizer}, with POET's \emph{resource specification} being replaced by just a minimum and maximum power cap.
@@ -116,6 +118,63 @@ where $U_{min}$ and $U_{max}$ are the system's minimum and maximum allowable pow
 Using $U_{min}$ and $U_{max}$ to clamp the upper bound of $s(t)$ before applying the gain prevents slow controller response when the performance goal is not achievable (in control theory terminology, this is called an anti-windup mechanism).
 The speedup signal is translated to a power cap by scaling $s(t)$ by $U_{min}$.
 
-\TODO{Explain and formulate gain limits.}
+As in POET, the CoPPer controller calculates the error between desired and actual performance.
+In CoPPer, $gain(t)$ is set to $1$ until the controller settles, regardless of the user configuration.
 
-\TODO{Demonstrate phases video -- need to update POET example to use performance instead of latency.}
+To formally describe the gain, we quote from the CoPPer paper (still under review):
+\begin{quote}
+Intuitively, if the performance error value [...] is low, then the system
+has converged to the performance target and the speedup signal should
+remain where it is.  However, if error values are high but the
+\emph{difference} in error values between iterations is low, the controller
+has settled, but the performance target is not achievable.  It
+therefore may be beneficial to reduce the speedup, and thus the power.
+Speedup is reduced by setting gain to:
+\begin{eqnarray}
+  gain(t) = 1 - \alpha_c \cdot e_{ns}(t) \cdot \Delta e_{ns}(t)
+  \label{eqn:cost-pole}
+\end{eqnarray}
+where $\alpha_c$ ($0 \le \alpha_c < 1$) is the \emph{gain limit}, a
+constant that controls how low the gain can go, and:
+\begin{eqnarray}
+  e_n(t) = \frac{|e(t)|}{P_{ref}}
+  \label{eqn:en} \\
+  \Delta e_n(t) = \left| e_n(t-1) - e_n(t) \right|
+  \label{eqn:den} \\
+  e_{ns}(t) = 1 - \frac{1}{e_{n}(t)+1}
+  \label{eqn:ens} \\
+  \Delta e_{ns}(t) = \frac{1}{\Delta e_{n}(t)+1}
+  \label{eqn:dens}
+\end{eqnarray}
+Since $P_{ref}$ is the performance target, $e_n(t)$ is the absolute normalized performance error.
+$\Delta e_n(t)$ in \eqnref{den} is the absolute change in $e_n(t)$ since the previous
+iteration.  \eqnsref{ens}{dens} compute values $e_{ns}(t)$ and $\Delta
+e_{ns}(t)$, which determine how much impact $e_n(t)$ and $\Delta
+e_{n}(t)$ have on reducing the speedup.  Both $e_{ns}(t)$ and $\Delta
+e_{ns}(t)$ lay in the unit circle.  As normalized performance error
+$e_n(t)$ approaches 0, $e_{ns}(t)$ also approaches 0, which reduces
+the impact of the gain limit in \eqnref{cost-pole}.  Conversely, if
+the error is high, $e_{ns}(t)$ approaches 1 and the gain limit will
+have a greater impact on the change speedup.  As the change in
+normalized performance error $\Delta e_{n}(t)$ approaches 0, $\Delta
+e_{ns}(t)$ approaches 1, thus increasing the gain limit's impact in
+\eqnref{cost-pole}.  Conversely, if the change in error is high,
+$\Delta e_{ns}(t)$ approaches 0 and the gain limit will have less
+impact on the change in speedup.  Therefore, \eqnref{cost-pole}
+reduces the speedup signal by a factor of at most $\alpha_c$, with the
+greatest change in speedup occurring when the absolute performance
+error $e_n(t)$ is high and the absolute change in error $e_n(t)$ is
+low.  Setting $\alpha_c=0$ disables the gain limit entirely,
+corresponding to $gain(t) =1 $ in \eqnref{copper-speedup-control}.
+\end{quote}
+
+\begin{figure}[t]
+  \input{img/CoPPer/x264-phases.tex}
+  \caption{Processing x264 input with distinct phases using CoPPer.}
+  \label{fig:poet-phases-x264}
+\end{figure}
+
+In \figref{poet-phases-x264}, we run the same experiment using \bench{x264} with CoPPer as we did with POET, without using a gain limit.
+CoPPer is clearly able to meet the performance target, despite the noisy application and changes in phases.
+Furthermore, CoPPer's overhead is $O(1)$ -- the controller runs in constant time, and there is no need to search a configuration space.
+Additionally, only two system settings changes are required -- one power cap actuation on each system socket, as opposed to DVFS actuation which requires setting each core (or set of related cores) separately.
