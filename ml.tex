@@ -1,5 +1,91 @@
 \section{Energy Efficiency with Machine Learning}
 
-\TODO{Describe classification problem and ML approach.}
+A different goal in balancing performance and energy consumption is to run as energy-efficiently as possible.
+More formally, an application (or perhaps a data center administrator) may wish maximize the amount of work completed per unit of energy consumption.
+If energy efficiency is maximized, the system achieves an optimal throughout-to-cost ratio, where cost is measured in energy consumption, which has a known value.
 
-\TODO{Show time series adaptation from boggle.}
+In high-performance computing (HPC) environments, maximizing energy efficiency can allow more research to be completed for the same runtime costs.
+Naturally there are fixed costs in running large-scale computing clusters, with some components always (or almost always) running and consuming power.
+It can therefore beneficial to keep the rest of the data center busy as well.
+Such environments are also often expected to consume a certain level of power that they contract for, and if it is unused, it is wasted.
+By maximizing energy efficiency in computation, more work can be performed simultaneously, particularly if all the compute nodes would not otherwise be used concurrently.
+The same holds if the cluster is intentionally over-allocated, \ie more nodes exist than can be run at maximum power at any given moment.
+
+
+% \subsection{Related Work}
+
+% \TODO{Prior work on EE in HPC, esp. using classification, ML, or other statistical techniques.}
+
+
+\subsection{Proposal}
+
+Recalling the SEEC design, there are three components -- \emph{observe}, \emph{decide}, and \emph{act}.
+For observation, we use the Performance Counter Monitor (PCM) tool, originally created by Intel (now open source).
+% \TODO{cite PCM.}
+PCM exposes low-level hardware counter relating to processor and memory stack behavior, such as instructions retired, L2/L3 cache misses, and energy consumption.
+While performance (\ie application progress) is most accurately measured by instrumenting an application with a tool like Heartbeats, this is not always feasible, nor does it work well for applications that do not contain high-level loops, or HPC applications that are difficult and time-consuming to modify.
+We find that the rate of instructions retired is sufficient for estimating application progress, particularly when the performance value alone is not important to the decision logic (described shortly).
+The measure of \emph{energy efficiency}, which we wish to maximize, is then $IPS / Watts$, where $IPS$ is instructions retired per second.
+This reduces to instructions retired per Joule of energy consumed.
+
+We now propose to implement the decision component by treating the decision as a classification problem.
+Specifically, we wish to decide on the most energy-efficient DVFS setting to run in.
+Many machine learning approaches are well-suited to this task, including but not limited to: support vector machine (SVM), k-nearest neighbors (KNN), random forest (RF), stochastic gradient descent (SGD), and gradient boosting (GB).
+There are many off-the-shelf implementations of these algorithms for us to use, avoiding the need to implement them ourselves.
+\figref{classifier-runtime} demonstrates the proposed approach.
+
+\begin{figure}[t]
+  \begin{centering}
+    \input{img/boggle/scheme.tex}
+    \caption{Overview of the machine learning classifier runtime.}
+    \label{fig:classifier-runtime}
+  \end{centering}
+\end{figure}
+
+We begin by capturing samples of PCM data from various benchmark applications by running them in different DVFS settings on a quad-socket, 160-virtual-core server-class system.
+For now, we limit ourselves to the 80 physical cores.
+From these samples, we identify the most energy-efficient DVFS settings, which we use to train a machine learning classifier.
+Before training, however, we must first normalize the PCM data and perform \emph{feature selection} to identify fields (hardware counters) from the PCM data that correlate well with energy efficiency.
+Initial indications are that \emph{principal component analysis} (PCA) will work well.
+Once feature selection is performed, a classifier is trained by supplying it with the normalized and filtered PCM results and a set of labels identifying the optimal DVFS setting for each sample.
+
+The classifier can then be run in the background of any application.
+It receives results from PCM (post-normalization and feature selection) at preset time intervals and produces a prediction on the best DVFS setting to run in.
+The actuation component, as in prior controller work, is system-specific.
+In the ideal case, the classifier will produce the optimal DVFS setting for the current application behavior, and change its prediction accordingly as the application behavior changes, \eg due to transitioning between phases/stages.
+
+One example of applications we will test with the classifier is High Performance Meraculous (HipMer), a distributed a scalable version of a genome assembler.
+HipMer execution proceeds through a number of application phases, some of which have different optimal DVFS settings when maximizing energy efficiency.
+
+
+\TODO{Show x264 time series adaptation from boggle -- also need to show uncontrolled behavior?}
+\figref{classifier-phases-x264} demonstrates the same \bench{x264} application with phased input as shown previously.
+In this case we cannot track frames separately since the software is not instrumented with Heartbeats.
+Instead, we present the DVFS frequency and energy efficiency achieved with each classifier iteration.
+DVFS frequency is normalized to the nominal frequency (the maximum, ignoring TurboBoost).
+Energy efficiency is normalized to the best efficiency achievable using a fixed DVFS setting.
+
+\begin{figure}[t]
+  \input{img/boggle/x264-phases.tex}
+  \caption{Processing x264 input with distinct phases using a Support Vector Machine classifier.}
+  \label{fig:classifier-phases-x264}
+\end{figure}
+
+% \TODO{Some outstanding problems to address.  For example, PCM data being corrupted by also capturing the classifier's compute cycles.}
+
+
+\subsection{Optional and Post-Thesis Work}
+
+There is still much work that is not part of this thesis proposal that we would like to explore, time and resources permitting.
+For single-system research, we would, of course, like to explore using Hyperthreads in addition to physical cores.
+Adding socket and/or core allocation should also provide additional improvements in energy efficiency for some applications, particularly those that do not scale well.
+To do this properly, we may need additional support from applications, OpenMP and MPI implementations to provide truly dynamic thread management at runtime.
+
+As with the CoPPer project, adjusting power caps instead of DVFS appears to be the future approach for software to explicitly manage power (and thus frequency) allocations.
+Power capping could also be treated as a classification problem by limiting the power caps to a discrete set of values (\eg in RAPL, power caps are indeed limited to fixed increments), though the number of possible settings would likely be large for server-class systems.
+It could also be treated as an estimation problem, in which the decision logic produces a real value (or vector of values) to apply to one or more system components.
+
+The most interesting research questions arise when considering the balance of performance and energy consumption across multiple systems (nodes), which we typically find in both HPC and cloud computing environments.
+Additional complexity arises in bridging the gap between local optimization and global optimization.
+Such problems may include, but are not limited to, the possible need for a centralized master controller (thus limiting scalability), increased time and energy overhead of communication between nodes (linear or even exponential in simple approaches), and avoiding decisions that seem beneficial locally but are counter-productive globally.
+Further issues arise when considering heterogeneous environments, unbalanced workloads, node failure scenarios, application check-pointing, and shared resources like the network and non-local storage.

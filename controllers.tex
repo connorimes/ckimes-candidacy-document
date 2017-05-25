@@ -1,8 +1,20 @@
 \section{Performance and Energy Management using Control Theory}
 
+We first address the problem of meeting application performance goals while minimizing energy consumption.
+Many applications must provide soft performance guarantees.
+For example, streaming applications often consume data from other sources like sensors, or must meet QoS requirements when serving client requests.
+
+We will restrict the application domain here to streaming-like applications with high-level loops, to which we apply the concept of Heartbeats \cite{icac2010heartbeats}.
+Practically, this involves adding a small amount of instrumentation into the applications to measure their progress (performance) and power/energy consumption at runtime.
+This is the \emph{observe} component of a SEEC-like system.
+On a related note, our modified implementation of Heartbeats uses an interface we designed called EnergyMon for capturing power/energy data in a portable manner \cite{energymon}.
+
 Unlike heuristics, control theory provides a formal approach for meeting goals in dynamic systems.
 Controllers can adapt despite non-trivial errors in their design parameters, and can guarantee convergence under certain bounds.
-There has been significant prior work \TODO{describe} in using designing software controllers, but most lack portability -- they are designed for specific systems and applications.
+% There has been significant prior work \TODO{describe} in using designing software controllers, but most lack portability -- they are designed for specific systems and applications.
+
+The \emph{decide} component of a SEEC-like system is described by the following controllers, POET and CoPPer.
+Finally, the \emph{act} component is platform-specific, and typically involves actuating processor configurations like core allocation and DVFS or power settings.
 
 
 \subsection{POET}
@@ -83,7 +95,7 @@ Performance is still somewhat noisy due to the unpredictable behavior of \bench{
 POET has also been used as the foundation for other controllers and projects.
 For example, we expanded on POET to create Bard \cite{Bard}, which adds the ability to instead meet soft power constraints and maximize performance.
 Farrell \etal build on POET by additionally changing application accuracy to provide hard real-time guarantees \cite{meantime}.
-Mishra \etal combine POET with machine learning to reduce the amount of offline work needed to generate resource specifications, and update both the specification and pole value online as new application behavior is learned \TODO{cite}.
+In work still under review, Mishra \etal combine POET with machine learning to reduce the amount of offline work needed to generate resource specifications, and update both the specification and pole value online as new application behavior is learned.
 POET was also the starting point in an ongoing project called Proteus, in which we are developing a programming language called FAST that allows programmers to specify more general constraints and optimizations called \emph{intents} -- both system and application knobs can be adjusted to satisfy the intents.
 
 
