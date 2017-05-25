@@ -4,15 +4,14 @@ We first address the problem of meeting application performance goals while mini
 Many applications must provide soft performance guarantees.
 For example, streaming applications often consume data from other sources like sensors, or must meet QoS requirements when serving client requests.
 
-We will restrict the application domain here to streaming-like applications with high-level loops, to which we apply the concept of Heartbeats \cite{icac2010heartbeats}.
+We will restrict the application domain here to streaming-like applications with high-level loops, to which we apply the concept of Heartbeats to measure application and system behavior \cite{icac2010heartbeats}.
 Practically, this involves adding a small amount of instrumentation into the applications to measure their progress (performance) and power/energy consumption at runtime.
 This is the \emph{observe} component of a SEEC-like system.
-On a related note, our modified implementation of Heartbeats uses an interface we designed called EnergyMon for capturing power/energy data in a portable manner \cite{energymon}.
+On a related note, our modified implementation of Heartbeats uses an interface called EnergyMon that we designed for capturing power/energy data in a portable manner \cite{energymon}.
 
 Unlike heuristics, control theory provides a formal approach for meeting goals in dynamic systems.
-Controllers can adapt despite non-trivial errors in their design parameters, and can guarantee convergence under certain bounds.
+Control-theoretic approaches can adapt despite non-trivial errors in their design parameters, and can guarantee convergence under certain bounds.
 % There has been significant prior work \TODO{describe} in using designing software controllers, but most lack portability -- they are designed for specific systems and applications.
-
 The \emph{decide} component of a SEEC-like system is described by the following controllers, POET and CoPPer.
 Finally, the \emph{act} component is platform-specific, and typically involves actuating processor configurations like core allocation and DVFS or power settings.
 
@@ -21,7 +20,7 @@ Finally, the \emph{act} component is platform-specific, and typically involves a
 
 Using \cite{Imes2014} as motivation for needing a portable approach to minimizing energy under performance constraints, we designed the Performance with Optimal Energy Toolkit (POET), which meets soft real-time constraints and minimizes energy consumption by actuating both system DVFS settings and application core allocation \cite{POET}.
 While POET was originally evaluated on embedded systems, we later evaluated it on a dual socket, 32-logical-core server-class system \cite{POETMCSoC}.
-Its design mimics the high-level self-aware model described earlier, as shown in \figref{poet-runtime}.
+Its design is reflective of the SEEC model, and is shown in \figref{poet-runtime}.
 
 \begin{figure}[t]
   \begin{centering}
@@ -34,15 +33,15 @@ Its design mimics the high-level self-aware model described earlier, as shown in
 In POET, the user provides a performance goal to the controller; the user or a systems developer provides it with a resource specification, which is a normalized table of performance and power behavior derived from a characterization of a representative application.
 At fixed work intervals called window periods, the controller computes a new resource schedule that is applied over the following window period.
 
-The schedule is computed by first calculating the error, $e(t)$, between the desired performance (timing goal), and the observed application performance (timing feedback).
-This error is then used to compute a new speedup value, $s(t)$, so that the speedup cancels the error:
+The schedule is computed by first calculating the error, $e(t)$, between the desired performance (performance goal), and the observed application performance (performance feedback).
+The \emph{controller} uses this error to compute a new speedup value (generic control signal), $s(t)$, so that the speedup cancels the error:
 \begin{equation}
   s(t) = s(t-1) + (1-p) \cdot \frac{e(t)}{b(t)} 
   \label{eqn:poet-control}
 \end{equation}
 Here $p$ is a configurable \emph{pole} value such that $0 \le p < 1$, which affects how responsive the controller is to system noise or changes in application behavior.
 A small value of $p$ causes the controller to respond quickly, but also more susceptible to noise.
-A larger $p$ makes slows the response, but ensures robustness and is more useful in noisy systems.
+A larger $p$ slows the response, but ensures robustness and is more useful in noisy systems.
 % (Mishra \etal propose adjusting the pole at runtime to improve behavior when combining POET with a machine linear approach that updates POET's resource specification at runtime \TODO{cite}.)
 
 Because the system model provided to the controller is normalized to $c=0$, the controller must estimate the application's base speed, $b(t)$, to bridge the gap between speedup and actual performance.
@@ -65,14 +64,14 @@ This optimization problem is formulated as a linear program, solved in $O(C^2)$ 
 && 0 \le \tau_c \le \tau, \qquad \forall c \in \{0,\ldots,C-1\} \label{eqn:poet-time}
 \end{eqnarray}
 The resulting schedule consists of, at most, two configurations with $\tau_c > 0$.
-This control and optimization approach provides formal guarantees about steady-state convergence and robustness while remaining independent of any particular application or system.
 
+This control and optimization approach provides formal guarantees about steady-state convergence and robustness while remaining independent of any particular application or system.
 We demonstrated POET's ability to meet performance goals and adapt to changes in application phases at runtime by executing the \bench{x264} video encoding application using an input that is a combination of three videos of varying encoding difficulty.
 
 \figref{poet-phases-default} is a time series of job performance and system power power consumption when running \bench{x264} without POET in the highest resource configuration ($C-1$).
 Performance is normalized to the maximum recorded value.
-Frames that are easier to encode take less time (higher performance), indicating that it would require fewer system resources to meet a performance goal than a frame with lower performance.
-Application phases changes occur at frames 1,500 and 3,000, where there is an observable change in performance.
+Frames that are easier to encode (higher performance) take less time, indicating that it would require fewer system resources to meet a performance goal than a frame with lower performance.
+Input phase changes occur at frames 1,500 and 3,000, where there is an observable change in performance.
 The first and third phases have similar performance behavior, and thus are about the same level of encoding difficulty; the second phase is easiest to encode as it has higher average performance.
 
 \begin{figure}[t]
@@ -88,7 +87,7 @@ The first and third phases have similar performance behavior, and thus are about
 \end{figure}
 
 In \figref{poet-phases-x264}, we run with POET enabled, using a performance target that is about half of the system's maximum capacity.
-POET takes initial performance measurements during the first 100 frames, then begins changes system resources to meet the performance goal.
+POET takes initial performance measurements during the first 100 frames, then begins changing system resources to meet the performance goal.
 After around frame 300, the soft performance goal is respected for the remainder of the runtime.
 Performance is still somewhat noisy due to the unpredictable behavior of \bench{x264}, as can be observed in the uncontrolled execution, with slight dips and peaks appearing at the beginning of phases changes before POET has time to adapt.
 

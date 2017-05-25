@@ -12,7 +12,7 @@
   output/.style   = {coordinate} % Output
 }
 
-\begin{tikzpicture}[scale=0.7,transform shape, auto, thick, node distance=1.5cm, >=triangle 45]
+\begin{tikzpicture}[scale=1.0,transform shape, auto, thick, node distance=1.5cm, >=triangle 45]
 
 \draw
   % Drawing the top blocks
@@ -21,14 +21,14 @@
   node [sum, right of=goalaccuracy] (sumaccuracy) {} % negative feedback
   node [block, right of=sumaccuracy, align=center, node distance=2.6cm] (controlaccuracy) 
     {Controller}
-  node [block, right of=controlaccuracy, align=center, node distance=3.1cm] (translateaccuracy) 
+  node [block, right of=controlaccuracy, align=center, node distance=3.5cm] (translateaccuracy) 
     {Optimizer}
   node [blockres, above of=translateaccuracy, align=center, node distance=1.7cm] (resourcefile) 
     {Resource\\Specification}
 ;
   % Connectng lines
-\draw[->](goalaccuracy) -- node[align=center] {Timing\\Goal}(sumaccuracy);
-\draw[->](sumaccuracy) -- node[align=center] {Timing\\Error}(controlaccuracy);
+\draw[->](goalaccuracy) -- node[align=center] {Performance\\Goal}(sumaccuracy);
+\draw[->](sumaccuracy) -- node[align=center] {Performance\\Error}(controlaccuracy);
 \draw[->](controlaccuracy) -- node[align=center] {Generic\\Control\\Signal}(translateaccuracy);
 \draw[->](resourcefile) -- (translateaccuracy);
 
@@ -47,7 +47,7 @@
 
 % Connectng lines
 \coordinate (feedbackup) at ([yshift=-0.6cm]sumaccuracy.south);
-\draw (software.west |- feedbackup) -| node [near end,align=center] {Timing\\Feedback} (feedbackup);
+\draw (software.west |- feedbackup) -| node [near end,align=center] {Performance\\Feedback} (feedbackup);
 \draw[->](feedbackup) -- node[pos=0.99] {$-$} (sumaccuracy);
 
 \end{tikzpicture}

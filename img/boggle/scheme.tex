@@ -12,7 +12,7 @@
   output/.style   = {coordinate} % Output
 }
 
-\begin{tikzpicture}[scale=0.7,transform shape, auto, thick, node distance=1.5cm, >=triangle 45]
+\begin{tikzpicture}[scale=1.0,transform shape, auto, thick, node distance=1.5cm, >=triangle 45]
 
 \draw
   % Drawing the top blocks
@@ -21,7 +21,7 @@
   % node [sum, right of=goalaccuracy] (sumaccuracy) {} % negative feedback
   node [block, align=center] (featureselection) 
     {Feature\\Selection}
-  node [block, right of=featureselection, align=center, node distance=3.1cm] (classifier) 
+  node [block, right of=featureselection, align=center, node distance=3.5cm] (classifier) 
     {Classifier}
   node [blockres, above of=classifier, align=center, node distance=1.7cm] (trainingdata) 
     {Training\\Data}
@@ -46,8 +46,8 @@
 \draw[->](classifier.east) -- node [name=ka,align=center]{DVFS\\Frequency} (classifier.east -| system.west);
 
 % Connectng lines
-\coordinate (feedbackup) at ([yshift=-0.6cm]featureselection.south);
-\draw (software.west |- feedbackup) -| node [near end,align=center] {PCM\\Sample} (feedbackup);
-\draw[->](feedbackup) -- node[pos=0.99] {$-$} (featureselection);
+\coordinate (feedbackup) at ([yshift=-0.5cm]featureselection.south);
+\draw (system.west |- feedbackup) -| node [near end,align=center] {PCM\\Sample} (feedbackup);
+\draw[->](feedbackup) -- node[pos=0.99] {} (featureselection);
 
 \end{tikzpicture}

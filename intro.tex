@@ -7,13 +7,13 @@ For example, most systems provide a mechanism to control dynamic voltage and fre
 Another common approach is to change the allocation of the number of compute cores on multicore systems, allowing unallocated cores to enter low-power sleep states, or even shut down altogether to save power/energy.
 
 We can characterize the performance and power consumption of applications in different system configurations by testing them in each configuration and recording the behavior.
-Performance and power form a non-linear, convex tradeoff space, where each system configuration, \eg DVFS setting, produce a unique application performance and system power values.
+Performance and power form a non-linear, convex tradeoff space, where each system configuration, \eg DVFS setting, produces unique application performance and system power values.
 % \TODO{Show an example.}
 
 % In some cases, the goal is simply to run software as fast as possible, and as long as energy consumption is not a concern, this is acceptable.
 As power and energy become first-class concerns in computing systems ranging from low-power embedded to large scale high-performance computing (HPC), there is an increasing need for software to manage hardware resource allocations to achieve a desirable balance in performance and power/energy consumption.
-Heuristic approaches rely on assumptions about the performance/power tradeoff space of an application and system that we have found are not portable between applications and systems (as we demonstrated in embedded systems) \cite{Imes2014}.
-For example, the classic race-to-idle heuristic can achieve low energy consumption on one system, but poor on another compared with an approach that never idles (or even a pace-to-idle approach).
+Heuristic approaches rely on assumptions about the performance/power tradeoff space of an application and system that we have found are not portable between applications and systems (as we demonstrated in embedded systems \cite{Imes2014}).
+For example, the classic race-to-idle heuristic can achieve low energy consumption on one system, but high energy consumption on another compared with an approach that never idles (or even a pace-to-idle approach).
 An interesting observation by Kim \etal is, ``Unless the function of a given machine is a straight line originating from the idle state, (0, $P_{idle}$), an idling heuristic is never optimal for all instances'' \cite{kim-cpsna2015}.
 The more convex the tradeoff space, the further from optimal any idling approach is.
 
@@ -26,9 +26,9 @@ The more convex the tradeoff space, the further from optimal any idling approach
 \end{figure}
 
 The lack of both portability and optimality of heuristics demand that we develop more general approaches to addressing the problems in balancing performance and power.
-In his PhD thesis, Hoffmann proposes a ``self-aware'' computing model (SEEC) that uses a closed-loop feedback design to ``observe, decide, and act'' \cite{HoffmannPhD}.
+In his PhD thesis, Hoffmann proposes a ``self-aware'' computing model (SEEC) that uses a closed-loop feedback design to \emph{observe}, \emph{decide}, and \emph{act} \cite{HoffmannPhD}.
 \figref{seec} demonstrates this concept.
-The SEEC model is more portable than heuristics because it includes an observation step that measures behavior at runtime rather than relying strictly on assumptions made offline.
+The SEEC model is more portable than many heuristics because it includes an observation step that measures behavior at runtime rather than relying strictly on assumptions made offline.
 We build on this high-level model and use feedback systems that measure application and system behavior during runtime to make changes to resource allocations as new information becomes available.
 Furthermore, the general design of our feedback systems, although still relying on some offline characterization of application and system behavior, are not dependent on extremely accurate or complete models, instead relying on runtime measurements to adapt.
 

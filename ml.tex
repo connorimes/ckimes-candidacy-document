@@ -2,11 +2,11 @@
 
 A different goal in balancing performance and energy consumption is to run as energy-efficiently as possible.
 More formally, an application (or perhaps a data center administrator) may wish maximize the amount of work completed per unit of energy consumption.
-If energy efficiency is maximized, the system achieves an optimal throughout-to-cost ratio, where cost is measured in energy consumption, which has a known value.
+If energy efficiency is maximized, the system achieves an optimal throughput-to-cost ratio, where cost is measured in energy consumption, which has a known fiscal value.
 
 In high-performance computing (HPC) environments, maximizing energy efficiency can allow more research to be completed for the same runtime costs.
 Naturally there are fixed costs in running large-scale computing clusters, with some components always (or almost always) running and consuming power.
-It can therefore beneficial to keep the rest of the data center busy as well.
+It can therefore be beneficial to keep the rest of the data center busy as well.
 Such environments are also often expected to consume a certain level of power that they contract for, and if it is unused, it is wasted.
 By maximizing energy efficiency in computation, more work can be performed simultaneously, particularly if all the compute nodes would not otherwise be used concurrently.
 The same holds if the cluster is intentionally over-allocated, \ie more nodes exist than can be run at maximum power at any given moment.
@@ -22,7 +22,7 @@ The same holds if the cluster is intentionally over-allocated, \ie more nodes ex
 Recalling the SEEC design, there are three components -- \emph{observe}, \emph{decide}, and \emph{act}.
 For observation, we use the Performance Counter Monitor (PCM) tool, originally created by Intel (now open source).
 % \TODO{cite PCM.}
-PCM exposes low-level hardware counter relating to processor and memory stack behavior, such as instructions retired, L2/L3 cache misses, and energy consumption.
+PCM exposes low-level hardware counter metrics relating to processor and memory hierarchy behavior, such as instructions retired, L2/L3 cache misses, and energy consumption.
 While performance (\ie application progress) is most accurately measured by instrumenting an application with a tool like Heartbeats, this is not always feasible, nor does it work well for applications that do not contain high-level loops, or HPC applications that are difficult and time-consuming to modify.
 We find that the rate of instructions retired is sufficient for estimating application progress, particularly when the performance value alone is not important to the decision logic (described shortly).
 The measure of \emph{energy efficiency}, which we wish to maximize, is then $IPS / Watts$, where $IPS$ is instructions retired per second.
@@ -42,7 +42,7 @@ There are many off-the-shelf implementations of these algorithms for us to use, 
   \end{centering}
 \end{figure}
 
-We begin by capturing samples of PCM data from various benchmark applications by running them in different DVFS settings on a quad-socket, 160-virtual-core server-class system.
+We begin by capturing samples of PCM data from various benchmark applications by running them in different DVFS settings on a quad-socket, 160-logical-core server-class system.
 For now, we limit ourselves to the 80 physical cores.
 From these samples, we identify the most energy-efficient DVFS settings, which we use to train a machine learning classifier.
 Before training, however, we must first normalize the PCM data and perform \emph{feature selection} to identify fields (hardware counters) from the PCM data that correlate well with energy efficiency.
@@ -54,22 +54,31 @@ It receives results from PCM (post-normalization and feature selection) at prese
 The actuation component, as in prior controller work, is system-specific.
 In the ideal case, the classifier will produce the optimal DVFS setting for the current application behavior, and change its prediction accordingly as the application behavior changes, \eg due to transitioning between phases/stages.
 
-One example of applications we will test with the classifier is High Performance Meraculous (HipMer), a distributed a scalable version of a genome assembler.
+One example of applications we will test the classifiers with is High Performance Meraculous (HipMer), a distributed a scalable version of a genome assembler.
 HipMer execution proceeds through a number of application phases, some of which have different optimal DVFS settings when maximizing energy efficiency.
 
-
-\TODO{Show x264 time series adaptation from boggle -- also need to show uncontrolled behavior?}
-\figref{classifier-phases-x264} demonstrates the same \bench{x264} application with phased input as shown previously.
-In this case we cannot track frames separately since the software is not instrumented with Heartbeats.
-Instead, we present the DVFS frequency and energy efficiency achieved with each classifier iteration.
-DVFS frequency is normalized to the nominal frequency (the maximum, ignoring TurboBoost).
-Energy efficiency is normalized to the best efficiency achievable using a fixed DVFS setting.
+\figref{classifier-phases-x264} shows a proof-of-concept of a SVM classifier providing predictions at runtime, using the same \bench{x264} application with phased input as demonstrated previously.
+In this experiment we cannot track frames separately since the software is not instrumented with Heartbeats.
+Instead, we present the DVFS frequency and energy efficiency achieved with each classifier iteration (approximately one second intervals).
+DVFS frequency is normalized to the system's nominal frequency (the maximum, ignoring TurboBoost); the horizontal bar indicates the optimal average frequency, computed offline.
+Energy efficiency is normalized to the average energy efficiency of this optimal frequency.
 
 \begin{figure}[t]
   \input{img/boggle/x264-phases.tex}
   \caption{Processing x264 input with distinct phases using a Support Vector Machine classifier.}
   \label{fig:classifier-phases-x264}
 \end{figure}
+
+There is clearly still room for improvement, but offline analysis indicates that the the proposed machine learning approach is promising, and we have demonstrated that such an approach is feasible on a real system.
+It should also be noted that \bench{x264} does not scale particularly well on this system for this input, so we expect to see better results for more HPC-like applications.
+The remaining work in the thesis includes:
+\begin{itemize}
+\item Examining in further detail which processor counter fields are most useful in predicting energy-efficient configurations.
+\item Exploring feature selection techniques beyond PCA.
+\item Evaluating the aforementioned classification approaches, and others not yet discussed, on one or more server-class systems at Lawrence Berkeley National Laboratory.
+\end{itemize}
+These tasks will almost certainly need to be iterated on multiple times, but we are confident there is publishable research insight to be had.
+Additionally, there is plenty of follow-up work and possible extensions to this project, described in further detail next.
 
 % \TODO{Some outstanding problems to address.  For example, PCM data being corrupted by also capturing the classifier's compute cycles.}
 
@@ -78,7 +87,7 @@ Energy efficiency is normalized to the best efficiency achievable using a fixed 
 
 There is still much work that is not part of this thesis proposal that we would like to explore, time and resources permitting.
 For single-system research, we would, of course, like to explore using Hyperthreads in addition to physical cores.
-Adding socket and/or core allocation should also provide additional improvements in energy efficiency for some applications, particularly those that do not scale well.
+Adding socket and/or core allocation should also provide additional improvements in energy efficiency for some applications, particularly those that do not scale well (like \bench{x264}).
 To do this properly, we may need additional support from applications, OpenMP and MPI implementations to provide truly dynamic thread management at runtime.
 
 As with the CoPPer project, adjusting power caps instead of DVFS appears to be the future approach for software to explicitly manage power (and thus frequency) allocations.
