@@ -11,17 +11,23 @@ Such environments are also often expected to consume a certain level of power th
 By maximizing energy efficiency in computation, more work can be performed simultaneously, particularly if all the compute nodes would not otherwise be used concurrently.
 The same holds if the cluster is intentionally over-allocated, \ie more nodes exist than can be run at maximum power at any given moment.
 
-
-% \subsection{Related Work}
-
-% \TODO{Prior work on EE in HPC, esp. using classification, ML, or other statistical techniques.}
+Work related to this proposal (see below) indicates that statistical and machine learning approaches can be both useful and practical for managing energy consumption of HPC applications at runtime.
+Significant related work is limited to building models for predicting power or energy consumption based on metrics like those captured from hardware performance counters.
+The more practical of these works use their models to drive resource scheduling algorithms to reduce energy consumption, usually by tuning DVFS and/or thread concurrency.
+% In most cases there is the expectation that this energy saving comes with a performance loss (as we also expect), although some do attempt to reduce energy without performance loss.
+% The most related work ...
+A very real benefit of statistical approaches is that we do not need to model complex computing systems, making well-designed techniques easier to reason about and more portable.
+Instead, a scheduler can infer behavior from sample and runtime data without having a priori knowledge of an entire tradeoff space or detailed knowledge of the system architecture.
+Of course we can still incorporate such knowledge to improve predictions, though.
+To our knowledge, nobody has yet evaluated standard machine learning techniques for maximizing energy efficiency at runtime.
+% \TODO{Introduce the concept of a micro-phase, where any change in system configuration caused by a change in application behavior would improve EE?}
 
 
 \subsection{Proposal}
 
-Recalling the SEEC design, there are three components -- \emph{observe}, \emph{decide}, and \emph{act}.
-For observation, we use the Performance Counter Monitor (PCM) tool, originally created by Intel (now open source).
-% \TODO{cite PCM.}
+% \TODO{Why is this novel?}
+Recalling the SEEC design, there are three tasks that a self-aware system must perform -- \emph{observe}, \emph{decide}, and \emph{act}.
+For observation, we use the Performance Counter Monitor (PCM) tool, originally created by Intel, now open source \cite{PCMGit}.
 PCM exposes low-level hardware counter metrics relating to processor and memory hierarchy behavior, such as instructions retired, L2/L3 cache misses, and energy consumption.
 While performance (\ie application progress) is most accurately measured by instrumenting an application with a tool like Heartbeats, this is not always feasible, nor does it work well for applications that do not contain high-level loops, or HPC applications that are difficult and time-consuming to modify.
 We find that the rate of instructions retired is sufficient for estimating application progress, particularly when the performance value alone is not important to the decision logic (described shortly).
@@ -76,24 +82,54 @@ The remaining work in the thesis includes:
 \item Examining in further detail which processor counter fields are most useful in predicting energy-efficient configurations.
 \item Exploring feature selection techniques beyond PCA.
 \item Evaluating the aforementioned classification approaches, and others not yet discussed, on one or more server-class systems at Lawrence Berkeley National Laboratory.
+\item Evaluating energy efficiency in a multiple application scenario in which co-located applications run concurrently.
+\item Improving energy efficiency further through additional actuators that we find to be beneficial, specifically at least one of: socket allocation, Hyperthreading, or using power capping instead of DVFS.
 \end{itemize}
+Socket and/or core allocation, \eg Hyperthreads, should provide additional improvements in energy efficiency for some applications, particularly those that do not scale well (like \bench{x264}).
+% To do this properly, we may need additional support from applications, OpenMP and MPI implementations to provide truly dynamic thread management at runtime.
+As specified as a motivator for the CoPPer project, adjusting power caps instead of DVFS appears to be the future approach for software to explicitly manage power (and thus frequency) allocations.
+Power capping could also be treated as a classification problem by limiting the power caps to a discrete set of values (\eg in RAPL, power caps are indeed limited to fixed increments), though the number of possible settings would likely be large for server-class systems.
+It could also be treated as an estimation problem, in which the decision logic produces a real value (or vector of values) to apply to one or more system components.
 These tasks will almost certainly need to be iterated on multiple times, but we are confident there is publishable research insight to be had.
-Additionally, there is plenty of follow-up work and possible extensions to this project, described in further detail next.
 
 % \TODO{Some outstanding problems to address.  For example, PCM data being corrupted by also capturing the classifier's compute cycles.}
 
 
-\subsection{Optional and Post-Thesis Work}
+\subsection{Related Work}
 
-There is still much work that is not part of this thesis proposal that we would like to explore, time and resources permitting.
-For single-system research, we would, of course, like to explore using Hyperthreads in addition to physical cores.
-Adding socket and/or core allocation should also provide additional improvements in energy efficiency for some applications, particularly those that do not scale well (like \bench{x264}).
-To do this properly, we may need additional support from applications, OpenMP and MPI implementations to provide truly dynamic thread management at runtime.
+% \TODO{Must be able to speak in more detail about any work cited here.}
 
-As with the CoPPer project, adjusting power caps instead of DVFS appears to be the future approach for software to explicitly manage power (and thus frequency) allocations.
-Power capping could also be treated as a classification problem by limiting the power caps to a discrete set of values (\eg in RAPL, power caps are indeed limited to fixed increments), though the number of possible settings would likely be large for server-class systems.
-It could also be treated as an estimation problem, in which the decision logic produces a real value (or vector of values) to apply to one or more system components.
+There is plenty of prior work in power-aware scheduling for HPC.
+Significant research has come out of LLNL, especially from from B.~Rountree, M.~Schulz, B.~de Supinski, and their collaborators like D.~Lowenthal from the University of Arizona and his current and former students.
+For example, Rountree \etal propose Adagio, which uses DVFS for saving energy in HPC applications with less than 1\% increase in runtime \cite{RountreeAdagio}.
+Adagio depends on accurate time predictions of both computation and MPI communication and works by predicting critical path code, only allowing slowdown for work that is not on the critical path.
+Follow-on work by Marathe \etal combines Adagio with Jitter \cite{Jitter} to distribute power to nodes and cores to improve HPC application performance, and also depends on accurate prediction of the critical path \cite{Marathe2015}.
+In multiple publications, Patki \etal propose hardware over-provisioning while operating under power constraints to increase total system throughput with approaches like RMAP \cite{PatkiRMAP}.
+More recent work has begun to put over-provisioning into practice.
 
+Other works related to performance and energy consumption make use of hardware performance counters, as we propose to do.
+% There are too many to list in their entirety, but we highlight a few of the most relevant.
+Wu \etal use performance/power modeling to provide suggestions for application changes to improve energy efficiency \cite{WuHPCComputer}.
+Importantly, they use Principle Component Analysis (PCA) and Spearman correlation to identify correlated performance counters related to energy efficiency, and multivariate regression to generate performance and power models.
+These models then drive a what-if prediction mechanism, \eg if TLB misses can be reduced by some amount, what will be the effect on performance and power?
+Tsafack Chetsa \etal use hardware performance counters to both predict an application's peak energy consumption and to reduce energy consumption of applications in HPC environments \cite{Chetsa}.
+Rather than focusing on phases of individual applications, they model the behavior of each node in a HPC system, treating it as a black box.
+This is not unlike our proposal in which we measure energy efficiency at a system level and will eventually evaluate multi-application scenarios.
+As a prerequisite for this thesis proposal, their work establishes, by citing existing publications, that performance counters can indeed be used to accurately model power/energy consumption of a whole system or specific system components like CPU and memory.
+Libutti \etal use a multi-objective evaluation approach to select and map resources to co-schedule applications and increase energy-delay-product \cite{Libutti2014}; performance counters are used to correlate memory intensiveness and power consumption, and are chosen statically.
+
+Sasaki \etal use a statistical learning and analysis approach to dynamically reduce energy consumption (up to a user-specified loss-in-performance ratio) for application phases determined at compile time \cite{Sasaki}.
+Shye \etal analyze the relationship between architectural performance counters and user satisfaction for applications, and use artificial neural networks to predict DVFS settings that will satisfy users while reducing power consumption \cite{ShyeIDVFS}.
+This approach is interesting, but is highly user- and application-dependent.
+In a short paper, Alvarado \etal use supervised learning techniques to create heuristics for managing thread processor affinity to improve energy consumption of parallel HPC applications based on a limited set of performance counters \cite{Alvarado}.
+The paper briefly discusses related work in statistical and machine learning techniques for scheduling thread affinity, but much of them are not power/energy-aware.
+Curtis-Maury \etal use a logistic regression model that is energy-aware, predicting performance and power to manage both Dynamic Thread Concurrency (DCT) and DVFS to reduce energy consumption without performance loss (and sometimes with performance gain) \cite{Curtis-Maury2008}.
+\TODO{Need to explain why this paper isn't the end-all approach, because it seems very good; also see their related works section.}
+
+
+\subsection{Exploratory and Post-Thesis Work}
+
+There is plenty of follow-up work and possible extensions to this proposal that we would also like to explore.
 The most interesting research questions arise when considering the balance of performance and energy consumption across multiple systems (nodes), which we typically find in both HPC and cloud computing environments.
 Additional complexity arises in bridging the gap between local optimization and global optimization.
 Such problems may include, but are not limited to, the possible need for a centralized master controller (thus limiting scalability), increased time and energy overhead of communication between nodes (linear or even exponential in simple approaches), and avoiding decisions that seem beneficial locally but are counter-productive globally.
