@@ -1,26 +1,25 @@
 \section{Performance and Energy Management using Control Theory}
 
 We first address the problem of meeting application performance goals while minimizing energy consumption.
-Many applications must provide soft performance guarantees.
-For example, streaming applications often consume data from other sources like sensors, or must meet QoS requirements when serving client requests.
-
-We will restrict the application domain here to streaming-like applications with high-level loops, to which we apply the concept of Heartbeats to measure application and system behavior \cite{icac2010heartbeats}.
-Practically, this involves adding a small amount of instrumentation into the applications to measure their progress (performance) and power/energy consumption at runtime.
+Many applications are subject to soft performance constraints -- for example, streaming applications often consume data from other sources like sensors, or must meet QoS requirements when serving client requests.
+In this project, we restrict the application domain to streaming-like applications with high-level loops, to which we apply the concept of Heartbeats to measure and record application performance and system power behavior \cite{icac2010heartbeats}.
+Practically, this involves adding a small amount of instrumentation into the applications to capture these metrics at runtime.
 This is the \emph{observe} component of a SEEC-like system.
-On a related note, our modified implementation of Heartbeats uses an interface called EnergyMon that we designed for capturing power/energy data in a portable manner \cite{energymon}.\footnote{EnergyMon with Java and Rust bindings and abstractions available at https://github.com/energymon/energymon}
+To support this observation requirement, we complement Heartbeats with the EnergyMon interface for capturing power/energy data in a portable manner \cite{energymon}.\footnote{EnergyMon with Java and Rust bindings and abstractions available at https://github.com/energymon/}
 
 Unlike heuristics, control theory provides a formal approach for meeting goals in dynamic systems.
-Control-theoretic approaches can adapt despite non-trivial errors in their design parameters, and can guarantee convergence under certain bounds.
+Control-theoretic approaches can adapt despite non-trivial errors in their design parameters and guarantee convergence under certain bounds.
 % There has been significant prior work \TODO{describe} in using designing software controllers, but most lack portability -- they are designed for specific systems and applications.
 The \emph{decide} component of a SEEC-like system is described by the following controllers, POET and CoPPer.
-Finally, the \emph{act} component is platform-specific, and typically involves actuating processor configurations like core allocation and DVFS or power settings.
+Finally, the \emph{act} component is platform-specific, and typically involves actuating system settings like core allocation and processor DVFS frequencies or power limits.
 
 
 \subsection{POET}
 
-Using \cite{Imes2014} as motivation for needing a portable approach to minimizing energy under performance constraints, we designed the Performance with Optimal Energy Toolkit (POET), which meets soft real-time constraints and minimizes energy consumption by actuating both system DVFS settings and application core allocation \cite{POET}.
+Using \cite{Imes2014} as motivation for needing a portable approach to minimizing energy under performance constraints, we designed the Performance with Optimal Energy Toolkit (POET).
+POET meets soft real-time constraints and minimizes energy consumption by actuating DVFS frequencies and core allocation \cite{POET}.
 While POET was originally evaluated on embedded systems, we later evaluated it on a dual socket, 32-logical-core server-class system \cite{POETMCSoC}.
-Its design is reflective of the SEEC model, and is shown in \figref{poet-runtime}.
+Its design, shown in \figref{poet-runtime}, reflects the SEEC model.
 
 \begin{figure}[t]
   \begin{centering}
@@ -30,39 +29,39 @@ Its design is reflective of the SEEC model, and is shown in \figref{poet-runtime
   \end{centering}
 \end{figure}
 
-In POET, the user provides a performance goal, $P_{ref}$, to the controller; the user or a systems developer provides it with a resource specification, which is a normalized table of performance and power behavior derived from a characterization of a representative application.
-At fixed work intervals called window periods, the controller computes a new resource schedule that is applied over the following window period.
+In POET, the user provides a \emph{performance goal}, $P_{ref}$, to the controller; the user or a systems developer provides it with a \textbf{resource specification}, which is a normalized table of performance and power behavior derived from a characterization of a representative application.
+At fixed work intervals called window periods, the controller computes a new \emph{resource schedule} that is applied over the following window period.
 
-The schedule is computed by first calculating the error, $e(t)$, between the desired performance (performance goal), and the observed application performance (performance feedback), $p_m(t)$:
+The schedule is computed by first calculating the \emph{performance error}, $e(t)$, between the performance goal, and the observed application performance (\emph{performance feedback}), $p_m(t)$:
 \begin{eqnarray}
   e(t) = P_{ref} - p_m(t)
   \label{eqn:error}
 \end{eqnarray}
-The \emph{controller} uses this error to compute a new speedup value (generic control signal), $s(t)$, so that the speedup cancels the error:
+The \textbf{controller} uses this error to compute a new speedup value (\emph{generic control signal}), $s(t)$, so that the speedup cancels the error:
 \begin{equation}
   s(t) = s(t-1) + (1-p) \cdot \frac{e(t)}{b(t)} 
   \label{eqn:poet-control}
 \end{equation}
 Here $p$ is a configurable \emph{pole} value such that $0 \le p < 1$, which affects how responsive the controller is to system noise or changes in application behavior.
-A small value of $p$ causes the controller to respond quickly, but also more susceptible to noise.
+A small value of $p$ causes the controller to respond quickly, but is also more susceptible to noise.
 A larger $p$ slows the response, but ensures robustness and is more useful in noisy systems.
 
-Because the system model provided to the controller is normalized to $c=0$ (described shortly), the controller must estimate the application's base speed, $b(t)$, to bridge the gap between speedup and actual performance.
+Because the POET's resource specification is normalized to $c=0$ (described shortly), the controller must estimate the application's base speed, $b(t)$, to bridge the gap between speedup and actual performance.
 Every application has its own base speed, whose value may change at runtime as the application progresses through different \emph{phases}.
 POET updates its base speed estimate at every control iteration using a Kalman filter~\cite{welch2006kalman}.
 
-Once $s(t)$ is computed, POET's \emph{optimizer} searches the configuration set to find the pair of configurations that provides the optimal energy consumption while respecting the performance (speedup) constraint.
+Once $s(t)$ is computed, POET's \textbf{optimizer} searches the resource specification to find the pair of configurations that provides the optimal energy consumption while respecting the performance (speedup) constraint.
 There are $C$ configurations in the resource specification, and by convention we number the configurations from $0$ to $C-1$.
 Configuration $c = 0$ is the lowest-performance/lowest-power configuration where the least amount of resources are allocated.
 Configuration $C-1$ is the highest-performance/highest-power configuration where the maximum amount of resources are allocated.
-Every configuration $c$ has normalized performance (speedup) $s_c$ and normalized power consumption (powerup) $p_c$.
+Every configuration $c$ has normalized performance (speedup) $s_c$ and normalized power consumption (powerup) $p_c$ values.
 
-In computing the resource schedule, the optimizer assigns each configuration $c$ an execution time $\tau_c$, ensuring that the $I(t)$ iterations complete while the total energy is minimized.
+In computing the resource schedule, the optimizer assigns each configuration $c$ an execution time $\tau_c$, ensuring that the $W$ iterations complete while the total energy is minimized, where $W$ is the window period.
 This optimization problem is formulated as a linear program, solved in $O(C^2)$ time:
 \begin{eqnarray}
 \minimize && \sum_{c=0}^{C-1} \tau_c \cdot p_c \label{eqn:poet-power} \\
 \st %&& \nonumber\\
-&& \sum_{c=0}^{C-1} \tau_c \cdot s_c \cdot b(t) =  I(t) \label{eqn:poet-work} \\
+&& \sum_{c=0}^{C-1} \tau_c \cdot s_c \cdot b(t) = W \label{eqn:poet-work} \\
 && \sum_{c=0}^{C-1} \tau_c =  \tau \label{eqn:poet-deadline} \\
 && 0 \le \tau_c \le \tau, \qquad \forall c \in \{0,\ldots,C-1\} \label{eqn:poet-time}
 \end{eqnarray}
@@ -71,15 +70,15 @@ The resulting schedule consists of, at most, two configurations with $\tau_c > 0
 This control and optimization approach provides formal guarantees about steady-state convergence and robustness while remaining independent of any particular application or system.
 We demonstrated POET's ability to meet performance goals and adapt to changes in application phases at runtime by executing the \bench{x264} video encoding application using an input that is a combination of three videos of varying encoding difficulty.
 
-\figref{poet-phases-default} is a time series of job performance and system power power consumption when running \bench{x264} without POET in the highest resource configuration ($C-1$).
+\figref{poet-phases-default} is a time series of job performance and system power consumption when running \bench{x264} without any control in the highest resource configuration ($C-1$).
 Performance is normalized to the maximum recorded value.
 Frames that are easier to encode (higher performance) take less time, indicating that it would require fewer system resources to meet a performance goal than a frame with lower performance.
-Input phase changes occur at frames 1,500 and 3,000, where there is an observable change in performance.
+Input phase changes occur at frames 1,500 and 3,000, where there are observable changes in performance.
 The first and third phases have similar performance behavior, and thus are about the same level of encoding difficulty; the second phase is easiest to encode as it has higher average performance.
 
 \begin{figure}[t]
   \input{img/clover/x264-phases-default.tex}
-  \caption{Processing x264 input with distinct phases.}
+  \caption{Processing x264 input with distinct phases in an uncontrolled setting.}
   \label{fig:poet-phases-default}
 \end{figure}
 
@@ -90,28 +89,25 @@ The first and third phases have similar performance behavior, and thus are about
 \end{figure}
 
 In \figref{poet-phases-x264}, we run with POET enabled, using a performance target that is about half of the system's maximum capacity.
-POET takes initial performance measurements during the first 100 frames, then begins changing system resources to meet the performance goal.
-After around frame 300, the soft performance goal is respected for the remainder of the runtime.
-Performance is still somewhat noisy due to the unpredictable behavior of \bench{x264}, as can be observed in the uncontrolled execution, with slight dips and peaks appearing at the beginning of phases changes before POET has time to adapt.
+POET takes initial performance measurements during the first window period of 100 frames, then begins changing system resources to meet the performance goal.
+After the end of the third window period, around frame 300, the soft performance goal is respected for the remainder of the runtime.
+Performance is still somewhat noisy due to the unpredictable behavior of \bench{x264}, as can be observed in the uncontrolled execution, with slight dips and peaks appearing at the beginning of phase changes before POET has time to adapt.
 
 POET has also been used as the foundation for other controllers and projects.
-For example, we expanded on POET to create Bard \cite{Bard}, which adds the ability to instead meet soft power constraints and maximize performance.\footnote{Both POET and Bard are available at http://poet.cs.uchicago.edu/}
-Farrell \etal build on POET by additionally changing application accuracy to provide hard real-time guarantees \cite{meantime}.
+We expanded on POET to create Bard, which adds the ability to instead meet soft power constraints and maximize performance \cite{Bard}.\footnote{Both POET and Bard are available at http://poet.cs.uchicago.edu/}
+Farrell and Hoffmann build on POET by additionally changing application accuracy to provide hard real-time guarantees \cite{meantime}.
 In work still under review, Mishra \etal combine POET with machine learning to reduce the amount of offline work needed to generate resource specifications, and update both the specification and pole value online as new application behavior is learned.
 POET was also the starting point in an ongoing project called Proteus, in which we are developing a programming language called FAST that allows programmers to specify more general constraints and optimizations called \emph{intents} -- both system and application knobs can be adjusted to satisfy the intents.
 
 
 \subsection{CoPPer}
 
-As hardware manufacturers move away from software-specified DVFS settings, we instead propose using software-defined, hardware-enforced power capping as the actuation mechanism for controllers.
+As hardware manufacturers move away from software-specified DVFS settings, we instead propose using software-defined, hardware-enforced power capping as the actuation mechanism for controllers to balance performance and power/energy consumption.
 We therefore proposed CoPPer, \textbf{Co}ntrol \textbf{P}erformance with \textbf{P}ow\textbf{er}.\footnote{CoPPer and related tools will be available at https://github.com/powercap/}
 In CoPPer, we address the same problem of minimizing energy consumption under soft performance constraints, with the hardware power capping implementation performing DVFS optimization ``under the hood'' for us, avoiding the need for the software controller to compute an optimal schedule.
 For this project, we do not manage core allocation.
 We evaluated CoPPer on the same server-class system as POET, using Intel Running Average Power Limit (RAPL) as the power capping implementation \cite{RAPL}.
 Specifically, we use the short term Package-level power constraints on each of the two system processor sockets.
-
-\figref{copper-runtime} demonstrates CoPPer's design.
-Note the absence of an \emph{optimizer}, with POET's \emph{resource specification} being replaced by just a minimum and maximum power cap.
 
 \begin{figure}[t]
   \begin{centering}
@@ -121,9 +117,13 @@ Note the absence of an \emph{optimizer}, with POET's \emph{resource specificatio
   \end{centering}
 \end{figure}
 
+\figref{copper-runtime} demonstrates CoPPer's design, which also reflects the SEEC model.
+Note the absence of an \textbf{optimizer} and \textbf{resource specification}.
+Unlike POET, CoPPer does not require a user or developer-specified model based on an application characterization -- only minimum and maximum power caps are needed.
 While CoPPer uses a similar control-theoretic approach as POET, it introduces a \emph{gain limit} term into the speedup formulation.
-Furthermore, CoPPer does not require a user or developer-specified model based on an application characterization.
 In layman's terms, the gain limit ``pulls'' down the power cap to prevent over-allocating power when it is not beneficial.
+
+As in POET, the CoPPer first calculates the error, $e(t)$, between desired and actual performance and estimates the base speed, $b(t)$ using a Kalman filter.
 The speedup formulation used in CoPPer is then:
 \begin{eqnarray}
   s(t) = max\left(1, gain(t) \cdot min\left(s(t-1) + \frac{e(t)}{b(t)}, \frac{U_{max}}{U_{min}}\right)\right)
@@ -131,10 +131,8 @@ The speedup formulation used in CoPPer is then:
 \end{eqnarray}
 where $U_{min}$ and $U_{max}$ are the system's minimum and maximum allowable power caps, respectively, and $0 < gain(t) <= 1$.
 Using $U_{min}$ and $U_{max}$ to clamp the upper bound of $s(t)$ before applying the gain prevents slow controller response when the performance goal is not achievable (in control theory terminology, this is called an anti-windup mechanism).
-The speedup signal is translated to a power cap by scaling $s(t)$ by $U_{min}$.
-
-As in POET, the CoPPer controller calculates the error between desired and actual performance.
-In CoPPer, $gain(t)$ is set to $1$ until the controller settles, regardless of the user configuration.
+Note that the speedup signal is now strictly internal to the \textbf{controller}, and is translated to a \emph{power cap} by scaling $s(t)$ by $U_{min}$.
+To maintain convergence guarantees, $gain(t)$ is set to $1$ until the controller settles, regardless of the user configuration.
 
 To formally describe the gain, we quote from the CoPPer paper (still under review):
 \begin{quote}
@@ -186,10 +184,11 @@ corresponding to $gain(t) =1 $ in \eqnref{copper-speedup-control}.
 \begin{figure}[t]
   \input{img/CoPPer/x264-phases.tex}
   \caption{Processing x264 input with distinct phases using CoPPer.}
-  \label{fig:poet-phases-x264}
+  \label{fig:copper-phases-x264}
 \end{figure}
 
-In \figref{poet-phases-x264}, we run the same experiment using \bench{x264} with CoPPer as we did with POET, without using a gain limit.
+In \figref{copper-phases-x264}, we run the same experiment using \bench{x264} with CoPPer as we did with POET, without using a gain limit.
 CoPPer is clearly able to meet the performance target, despite the noisy application and changes in phases.
-Furthermore, CoPPer's overhead is $O(1)$ -- the controller runs in constant time, and there is no need to search a configuration space.
-Additionally, only two system settings changes are required -- one power cap actuation on each system socket, as opposed to DVFS actuation which requires setting each core (or set of related cores) separately.
+CoPPer's overhead is $O(1)$ -- the controller runs in constant time as there is no need to search a configuration space.
+The overhead of actuating system changes is also low -- power caps are applied at a socket level, as opposed to DVFS which requires setting each core (or set of related cores) separately.
+Furthermore, CoPPer only requires one actuation in each window period, whereas POET usually requires two, as it must split a window period between two configurations.
