@@ -36,5 +36,5 @@ The first is meeting an application performance goal while minimizing the total 
 We formulate this as a constrained optimization problem, using control theory to meet the performance goal, and linear optimization to select the optimal pair of system configurations to use that satisfy the performance constraint.
 This approach is practical since in the aforementioned work, Kim \etal prove that an optimal solution to this constrained optimization problem requires, at most, two system configurations from the convex hull of the tradeoff space \cite{kim-cpsna2015}.
 The second approach addresses the problem of running software as energy-efficiently as possible, \ie maximizing the ratio of work completed to energy consumed.
-We treat this as a classification problem, using samples from low-level hardware performance counters to drive well-understood machine learning approaches that predict the most energy-efficient configuration to use.
+We treat this as a classification problem, using samples from low-level hardware performance counters to drive machine learning algorithms that predict the most energy-efficient configuration to use.
 This approach does not require the software to provide its own instrumentation, nor does the classifier need to know anything about the application in advance.

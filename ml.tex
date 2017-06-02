@@ -17,7 +17,8 @@ The more practical of these works use their models to drive resource scheduling 
 % A very real benefit of statistical approaches is that we do not need to model complex computing systems, making well-designed techniques easier to reason about and more portable.
 % Instead, a scheduler can infer behavior from sample and runtime data without having a priori knowledge of an entire tradeoff space or detailed knowledge of the system architecture.
 % Of course we can still incorporate such knowledge to improve predictions, though.
-To our knowledge, nobody has yet evaluated standard machine learning techniques for maximizing energy efficiency at runtime.
+To our knowledge, nobody has yet approached the goal of maximizing energy efficiency at runtime as a classification problem.
+We propose to predict the most energy-efficient system settings at runtime by using a machine learning-based classifier.
 % \TODO{Introduce the concept of a micro-phase, where any change in system configuration caused by a change in application behavior would improve EE?}
 
 
@@ -33,9 +34,9 @@ The measure of \emph{energy efficiency}, which we wish to maximize, is then $IPS
 This reduces to instructions retired per Joule of energy consumed.\footnote{Some related work has targeted ``useful'' IPS, by detecting instructions that do not progress the application, like spinlocks or parallelization/synchronization instructions. If we find during the course of this project that this may be necessary, we can look into it further.}
 
 We now propose to implement the \emph{decide} component by treating the decision as a classification problem.
-Specifically, we wish to decide on the most energy-efficient DVFS setting to run in.
+Specifically, we wish to decide on the most energy-efficient system settings to execute with.
 Many machine learning approaches are well-suited to this task, including but not limited to: support vector machine (SVM), k-nearest neighbors (KNN), random forest (RF), stochastic gradient descent (SGD), and gradient boosting (GB).
-There are many off-the-shelf implementations of these algorithms for us to use, avoiding the need to implement them ourselves.
+% There are many off-the-shelf implementations of these algorithms for us to use, avoiding the need to implement them ourselves.
 \figref{classifier-runtime} demonstrates the proposed approach, which again reflects the SEEC model.
 
 \begin{figure}[t]
@@ -46,26 +47,27 @@ There are many off-the-shelf implementations of these algorithms for us to use, 
   \end{centering}
 \end{figure}
 
-We begin by capturing samples of PCM data from various benchmark applications by running them in different DVFS settings on a quad-socket, 160-logical-core server-class system.
+We begin by capturing samples of PCM data from various benchmark applications by running them in different system settings on a quad-socket, 160-logical-core server-class system.
 For now, we limit ourselves to the 80 physical cores.
-From these samples, we identify the most energy-efficient DVFS settings, which we use to train a machine learning \textbf{classifier}.
+From these samples, we identify the most energy-efficient system settings, which we use to train a machine learning \textbf{classifier}.
 Before training, however, we must first normalize the PCM data and perform \textbf{feature selection} to identify fields (hardware counters) from the PCM data that correlate well with energy efficiency.
 Initial indications are that \emph{principal component analysis} (PCA) will work well.
 Once feature selection is performed, we train the classifier.
 
 The classifier can then be run in the background of any application (or in the future, any set of applications).
-It uses \emph{processed data} from PCM (post-normalization and feature selection) at preset time intervals and produces a prediction of the best \emph{DVFS frequency} to run in.
-In the ideal case, the classifier will produce the optimal, \ie most energy-efficient, DVFS setting for the current application behavior, and change its prediction accordingly as the application behavior changes, \eg due to transitioning between phases/stages.
+It uses \emph{processed data} from PCM (post-normalization and feature selection) at preset time intervals and produces a prediction of the best \emph{system settings} to use.
+In the ideal case, the classifier will produce the optimal, \ie most energy-efficient, settings for the current application behavior, and change its prediction accordingly as the application behavior changes, \eg due to transitioning between phases/stages.
 The \emph{act} component, as in prior controller work, is system-specific.
 
 One example of applications we will test the classifiers with is High Performance Meraculous (HipMer), a distributed a scalable version of a genome assembler.
 HipMer execution proceeds through a number of application phases, some of which have different optimal DVFS settings when maximizing energy efficiency.
+Results from an offline oracle suggest that an energy-efficient execution of HipMer would require only about 72\% of the energy consumed when using a race-to-idle approach, with a 30\% increase in runtime.
 
-\figref{classifier-phases-x264} shows a proof-of-concept of a SVM classifier providing predictions at runtime, using the same \bench{x264} application with phased input as demonstrated previously.
+We demonstrate a proof-of-concept classifier that predicts optimal DVFS settings at runtime.
+\figref{classifier-phases-x264} shows a SVM classifier providing DVFS predictions for the same \bench{x264} application with phased input we demonstrated previously.
 In this experiment we cannot track frames separately since the software is not instrumented with Heartbeats.
 Instead, we present the DVFS frequency and energy efficiency achieved with each classifier iteration, which are at approximately one second intervals.
-DVFS frequency is normalized to the system's nominal frequency, \ie the maximum, ignoring TurboBoost.
-The horizontal bar indicates the optimal average frequency, computed offline, and energy efficiency is normalized to the average energy efficiency of this optimal frequency.
+Both DVFS frequency and energy efficiency are normalized to the system's TurboBoost setting, which a race-to-idle heuristic would use.
 
 \begin{figure}[t]
   \input{img/boggle/x264-phases.tex}
@@ -73,22 +75,26 @@ The horizontal bar indicates the optimal average frequency, computed offline, an
   \label{fig:classifier-phases-x264}
 \end{figure}
 
-There is clearly still room for improvement, but offline analysis indicates that the the proposed machine learning approach is promising, and we have demonstrated that such an approach is feasible on a real system.
+There is clearly still room for improvement.
+Obvious issues could be that SVM is not necessarily the best classifier to use, or that there is insufficient training data thus far.
 It should also be noted that \bench{x264} does not scale particularly well on this system for this input, so we expect to see better results for more HPC-like applications.
+Further study is needed to determine how to improve the behavior, and we expect that other insights will need to be used in combination with a machine learning classifier to further improve energy efficiency or detect when the classifier is not producing good predictions.
+However, offline analysis indicates that the proposed machine learning-centric approach is promising, and we have demonstrated that such an approach is feasible on a real system.
 The remaining work in the thesis includes:
 \begin{itemize}
-\item Examining in further detail which PCM fields are most useful in predicting energy-efficient configurations.
+\item Examining in more detail which hardware counters are most useful in predicting energy-efficient configurations.
 % \item Exploring feature selection techniques beyond PCA.
 \item Evaluating the aforementioned classification approaches, and others not yet discussed, on one or more server-class systems at Lawrence Berkeley National Laboratory.
+\item Identifying problem-specific research insights to enhance the proposed machine learning-centric approach.
 \item Evaluating multiple-application scenarios, in which co-located applications run concurrently.
-\item Improving energy efficiency further through additional actuators that we find to be beneficial, specifically at least one of: socket allocation, Hyperthreading, or using power capping instead of DVFS.
+\item Improving energy efficiency further by using additional system knobs, specifically at least one of: socket allocation, Hyperthreading, or using power capping instead of DVFS.
 \end{itemize}
 Socket and/or core allocation, \eg Hyperthreads, should provide additional improvements in energy efficiency for some applications, particularly those that do not scale well (like \bench{x264}).
 % To do this properly, we may need additional support from applications, OpenMP and MPI implementations to provide truly dynamic thread management at runtime.
 As specified as a motivator for the CoPPer project, adjusting power caps instead of DVFS appears to be the future approach for software to explicitly manage power (and thus frequency) allocations.
 Power capping could also be treated as a classification problem by limiting the power caps to a discrete set of values (\eg in RAPL, power caps are indeed limited to fixed increments), though the number of possible settings would likely be large for server-class systems.
 It could also be treated as an estimation problem, in which the decision logic produces a real value (or vector of values) to apply to one or more system components.
-These tasks will almost certainly need to be iterated on multiple times, but we are confident there is publishable research insight.
+These tasks will almost certainly need to be iterated on multiple times, but we are confident that there are publishable research contributions.
 
 % \TODO{Some outstanding problems to address.  For example, PCM data being corrupted by also capturing the classifier's compute cycles, the need for "useful" IPS as opposed to raw IPS for measuring performance.}
 
@@ -114,7 +120,7 @@ Tsafack Chetsa \etal use hardware performance counters to both predict an applic
 Rather than focusing on phases of individual applications, they model the behavior of each node in a HPC system, treating it as a black box.
 This is not unlike our proposal in which we measure energy efficiency at a system level and will eventually evaluate multi-application scenarios.
 As a prerequisite for this thesis proposal, their work establishes, by citing existing publications, that performance counters can indeed be used to accurately model power/energy consumption of a whole system or specific system components like CPU and memory.
-Libutti \etal use a multi-objective evaluation approach to select and map resources to co-schedule applications and increase energy-delay-product \cite{Libutti2014}; performance counters are used to correlate memory intensiveness and power consumption, and are chosen statically.
+Libutti \etal use a multi-objective evaluation approach to select and map resources to co-schedule applications and decrease energy-delay-product \cite{Libutti2014}; performance counters are used to correlate memory intensiveness and power consumption, and are chosen statically.
 
 Sasaki \etal use a statistical learning and analysis approach to dynamically reduce energy consumption, up to a user-specified loss-in-performance ratio, for application phases determined at compile time \cite{Sasaki}.
 Shye \etal analyze the relationship between architectural performance counters and user satisfaction for applications, and use artificial neural networks to predict DVFS settings that will satisfy users while reducing power consumption \cite{ShyeIDVFS}.
@@ -125,15 +131,21 @@ The paper briefly discusses related work in statistical and machine learning tec
 The most similar work we are aware of is by Curtis-Maury \etal which uses a logistic regression model that is energy-aware, predicting performance and power to manage both Dynamic Concurrency Throttling (DCT) and DVFS to reduce energy consumption without performance loss (and sometimes with performance gain) \cite{Curtis-Maury2008}.
 Later work by Li \etal supports hybrid applications that combine OpenMP with MPI in distributed environments, requiring additional modeling and for memory, communication, and parallelization \cite{LiIPDPS2010}.
 Both works make use of hardware events, in combination with their own models using coefficients computed with multivariate regression.
-These works develop new models specifically designed to schedule applications for improved energy consumption with little or no performance loss, whereas our proposal is to use standard machine learning techniques to optimally balance performance and energy consumption by maximizing energy efficiency, without the need for complex profiling or prediction models.
+These works develop new models specifically designed to schedule applications for improved energy consumption with little or no performance loss.
+% whereas our proposal is to use standard machine learning techniques to optimally balance performance and energy consumption by maximizing energy efficiency, without the need for complex profiling or prediction models.
 % \TODO{These papers' related works sections are good.}
 
 Delimitrou and Kozyrakis propose Paragon, an interference and heterogeneity-aware scheduler for datacenters \cite{Paragon}, which uses an approach similar to the Netflix algorithm \cite{NetflixPrize}.
 Paragon uses data from previously scheduled applications to perform offline training of a classifier.
 This classifier can quickly measure the behavior of a new application at runtime and predict what server configuration it will run best on (heterogeneity in the datacenter), its impact on other co-located applications, and its own ability to tolerate interference.
 % Furthermore, Paragon scales to tens of thousands of servers and dozens of configurations.
-This work provides evidence that a classification approach backed by general machine learning and statistical techniques can make accurate resource scheduling predictions, as we propose to do for maximizing energy efficiency.
-We are hopeful that this general approach can produce results as good as the aforementioned works by Curtis-Maury \etal and Li \etal without the need for their specialized architectural-based statistical models and library instrumentation.
+This work provides evidence that a classification approach backed by machine learning and statistical techniques can make accurate resource scheduling predictions.
+
+Many related works introduce new statistical models of performance and energy consumption, driven by metrics from hardware performance counters, to predict system configurations that provide energy savings.
+In most cases, they attempt to reduce energy consumption without any performance loss, or at most a relatively small loss in performance.
+While these works are certainly important and insightful, the classic HPC mindset of maximizing throughput and making optimization a secondary concern misses the opportunity to instead maximize the work to energy ratio that is becoming more appropriate as the field evolves.
+As we move toward over-provisioned environments and exascale systems with aggressive power constraints, maximizing energy efficiency can provide an optimal balance of throughput and cost.
+We believe that treating this goal as a classification problem, backed by machine learning techniques, can efficiently produce accurate resource allocation predictions without the need for runtime evaluation of highly specialized statistical models. % such as those used by Curtis-Maury \etal and Li \etal
 
 
 \subsection{Exploratory and Post-Thesis Work}
